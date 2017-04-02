@@ -1,5 +1,4 @@
 #add-pssnapin Microsoft.Exchange.Management.PowerShell.E2010
-
 If (!(Get-module "activedirectory")) { Import-Module "activedirectory" }
 $ExSession = New-PSSession –ConfigurationName Microsoft.Exchange –ConnectionUri ‘http://cas01.meuhedet.org/powershell?serializationLevel=Full'
 Import-PSSession $ExSession
@@ -8,11 +7,20 @@ Set-Location D:\script
 #Set-ExecutionPolicy -ExecutionPolicy Unrestricted
 New-Alias -Name comm -Value .\comm.txt
 
-function UID {
-    $user = read-host "Please enter a username"
-    $user = Get-Mailbox -Identity $user | Select-Object samaccountname
-    $uid = Get-ADUser $user.samaccountname -Properties UID | select UID,name
-    Write-Host "`nUID: " $uid.uid "`nUser:" $user.samaccountname "`nName:" $uid.name
+#Last modified by offir.k 17.11.2016
+function UID ($input1){
+    if(!($input1)){
+        $input1 = read-host "Please enter a username"
+    }
+    $input1 = $input1.Trim()
+        $SearchID = "*"+$input1 ; $User = Get-ADUser -Filter {uid -like $SearchID} -Properties UID,OfficePhone,mobile| Select-Object samaccountname,UID,name,OfficePhone,mobile
+        if($User){
+             Write-Host "`nUID: " $User.uid "`nUser:" $User.samaccountname "`nName:" $User.name "`nmobile:" $User.mobile "`nOfficePhone:" $User.OfficePhone
+             break
+        }
+        $sam = Get-Mailbox -Identity $input1 | Select-Object samaccountname
+        $uid = Get-ADUser $sam.samaccountname -Properties UID,OfficePhone,mobile | select UID,name,OfficePhone,mobile
+        Write-Host "`nUID: " $uid.uid "`nUser:" $sam.samaccountname "`nName:" $uid.name "`nmobile:" $uid.mobile "`nOfficePhone:" $uid.OfficePhone
 }
 
 function boot ($comp){
@@ -20,9 +28,9 @@ function boot ($comp){
     [System.Management.ManagementDateTimeConverter]::ToDateTime($LastBootUpTime)
 }
 
-function setATR($user, $value, $attrib){
-    Set-ADUser $user -clear $attrib
-    Set-ADUser $user -Add @{"$attrib"="$value"}
+function setATR15($user, $value){
+    Set-ADUser $user -clear extensionattribute15
+    Set-ADUser $user -Add @{"extensionattribute15"="$value"}
 }
 
 
@@ -85,6 +93,7 @@ function Select-GuiDropDown ([array]$data, [string]$title){
         $DropDown = New-Object System.Windows.Forms.ComboBox
         $DropDown.DataSource = @($data)
         $DropDown.Location  = New-Object System.Drawing.Point($x,$y)
+	$DropDown.TabIndex = 0
         return $DropDown
     }
 
@@ -122,7 +131,47 @@ function Select-GuiDropDown ([array]$data, [string]$title){
     [void]$window.ShowDialog()
     return $choice
 }
+#Created by offir.k
+#Last modified by offir.k 2.4.17
 
+function Kill_Composit($SystemTeam = @($zahi,$offir,$eliav,$shlomi,$ron,$diana,$shahar)){
+#region Users
+    $zahi = New-Object PSObject -property @{
+                                Name = "zahi"
+                                Computer = "212"
+                                }
+    $offir = New-Object PSObject -property @{
+                                Name = "offir"
+                                Computer = "231"
+                                }
+    $eliav = New-Object PSObject -property @{
+                                Name = "eliav"
+                                Computer = "123"
+                                }
+    $shlomi = New-Object PSObject -property @{
+                                Name = "shlomi"
+                                Computer = "53"
+                                }
+    $ron = New-Object PSObject -property @{
+                                Name = "ron"
+                                Computer = "57"
+                                }
+    $diana = New-Object PSObject -property @{
+                                Name = "diana"
+                                Computer = "216"
+                                }
+    $shahar = New-Object PSObject -property @{
+                                Name = "shahar"
+                                Computer = "129"
+                                }
+#endregion
+    $SysteamUsers = @($zahi,$offir,$eliav,$shlomi,$ron,$diana,$shahar)
+    foreach($User in $SystemTeam){
+        $User = $SysteamUsers -match $User
+        taskkill /s ("10.0.1."+($User.Computer)) /im compositagentextender.exe /t /f
+        taskkill /s ("10.0.1."+($User.Computer)) /im cimphoneagent.exe /t /f
+    }
+}
 
 Function Convert-BytesToSize
 {
@@ -266,19 +315,17 @@ function TestPort
         }
     }
 }
-
 function Skype{
-	$credential = Get-Credential "xzahi.o@meuhedet.org"
+	$credential = Get-Credential "xoffir.k@meuhedet.org"
 	$sessionskype = New-PSSession -ConnectionUri https://sfbpool.meuhedet.co.il/OcsPowershell -Credential ($credential)
 	echo "Loading module..."
 	Import-PSSession -Session $sessionskype
 } 
 
-#Last modified 11.01.2017 by Offir.k
+#Last modified 7.2.17 by Offir.k
 function NurseGroups{   
     function Nurses ($User){ 
         $NurseArray = "GRP_USR_HederTzevetGeneticScreening",`
-		      "GRP_USR_BI_G24_Workers_Nurses",`
                       "GRP_USR_HederTzevetNurses",`
                       "GRP_USR_HederTzevetPtzaim",`
                       "GRP_USR_HederTzevetStoma";
@@ -300,6 +347,10 @@ function NurseGroups{
         $UID = "*"+$PARAMETER
         $UIDsearch = Get-ADUser -Filter {UID -like $UID } -Properties *|Select-Object  name, samaccountname
         $UIDsearch
+        if(!($UIDsearch)){
+            Write-Host "UID not found. You better check that." -ForegroundColor Red
+            Break
+        }
         $Question = Read-Host "do you wish to continue?(y/n)"
         if($Question -eq "y"){
             Nurses $UIDsearch.samaccountname
@@ -322,6 +373,7 @@ function NurseGroups{
         }
     }
 }
+
 #Created by offir.k 
 #Last modified by offir.k 12.1.2017
 
@@ -349,11 +401,51 @@ function CurrentLoggedOnUser{
     }
     else{Write-Host "No ping to $comp" -ForegroundColor Red}
 }
-Add-PsSnapin VMware.VimAutomation.Core -ea "SilentlyContinue"
 
+#Created by offir.k
+#Last modified by offir.k 20.4.16
+#àéôåñ ñéñîä ìîùúîù áà÷èéá
+function ResetADUserPass {
+    $Search = Select-GuiDropDown -data ("UID","Samaccountname","Hebrew name") -title "Find User"
+        $PARAMETER = Read-Host "Enter Parameter"
+        if($Search -eq "UID"){
+            $UID = "*"+$PARAMETER
+            $UIDsearch = Get-ADUser -Filter {UID -like $UID } -Properties *|Select-Object  name, samaccountname
+            $result = $UIDsearch;$result
+            if(!($result)){Echo "`nUser does not exist."}
+        }
+        elseif($Search -eq "Samaccountname"){
+            $Samsearch = Get-ADUser $PARAMETER |Select-Object  name, samaccountname
+            $result = $Samsearch;$result
+            if(!($result)){Echo "`nUser does not exist."}
+        }
+        elseif($Search -eq "Hebrew name"){
+            $Name = $PARAMETER+"*"
+            $Namesearch = Get-ADUser -Filter {name -like $Name } -Properties *|Select-Object  name, samaccountname
+            $result = $Namesearch;$result
+            if(!($result)){Echo "`nUser does not exist."}
+        }
+        #else{Echo "`nUser does not exist."}
 
-# Read From File Vm_Info.csv 
+        if(!($result -eq $Null)){
+            $newPassword = (Read-Host -Prompt "Provide New Password" -AsSecureString); Set-ADAccountPassword -Identity $result.SamAccountName -NewPassword $newPassword -Reset
+            Set-ADUser -Identity $result.SamAccountName -ChangePasswordAtLogon $true
+            $Sam = $result.SamAccountName
+            echo "Password has been set for $Sam."
+            $result.SamAccountName|clip ; echo "Username has been copied to clipboard."
+    }
+}
 
+<#
+     Created by Eliav.f
+     Last modified by Eliav.f 1.3.2017
+
+     Retrieve useful data From "Vm_Info.csv" about VMWare and Hyper-v Virtual Machines.
+     The data is Updated on daily basis in 22:00	
+     Create by Eliav 28.2.17
+#>
+ 
+ 
 
 Function Read-VM{
     $CSV = Import-Csv \\docserver1\SYSTEM_DOCS\files\VM_Info\VM_Info.csv
@@ -369,24 +461,8 @@ Function Read-VM{
        # $IPAddress
     }
     Else{
-        Write-Host "`nThere was no matches, please try again" -ForegroundColor Red
+        Write-Host "`nThere was no matches, please try again." -ForegroundColor Red
         Read-VM
     }
 }
-
-
-
- function Kill_Composit{
-    taskkill /s systeam212 /im compositagentextender.exe /t /f
-    taskkill /s systeam212 /im cimphoneagent.exe /t /f
-    taskkill /s systeam123 /im compositagentextender.exe /t /f
-    taskkill /s systeam123 /im cimphoneagent.exe /t /f
-    taskkill /s systeam216 /im compositagentextender.exe /t /f
-    taskkill /s systeam216 /im cimphoneagent.exe /t /f
-    taskkill /s systeam129 /im compositagentextender.exe /t /f
-    taskkill /s systeam129 /im cimphoneagent.exe /t /f
-    taskkill /s systeam231 /im compositagentextender.exe /t /f
-    taskkill /s systeam231 /im cimphoneagent.exe /t /f
-}  
-
 Clear-Host
